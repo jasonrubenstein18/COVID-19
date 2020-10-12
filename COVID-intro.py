@@ -11,7 +11,9 @@ import plotly_express
 path = '/Users/jasonrubenstein/Desktop/Python/covid/COVID-19/csse_covid_19_data/csse_covid_19_daily_reports_us/*.csv'
 covid_files = glob.glob(path)
 
-class COVID():
+
+class COVID:
+
     def get_csvs(files):
         datas = pd.concat([
             pd.read_csv(datas,
@@ -21,13 +23,6 @@ class COVID():
             for datas in files], axis=0)
         df = datas.drop_duplicates(keep='first').reset_index(drop=True)
         return df
-
-
-    covid_data = get_csvs(covid_files)
-    covid_data = covid_data[covid_data['Last_Update'].notna()]
-    covid_data = covid_data.sort_values(by="Last_Update")
-    covid_data = covid_data.fillna(0)
-
 
     # Adjust dtype as necessary
     def to_ints(df):
@@ -76,6 +71,11 @@ class COVID():
         return df
 
 
+covid_data = get_csvs(covid_files)
+covid_data = covid_data[covid_data['Last_Update'].notna()]
+covid_data = covid_data.sort_values(by="Last_Update")
+covid_data = covid_data.fillna(0)
+
 covid_data = COVID.to_ints(covid_data)
 covid_data = COVID.shift_data(covid_data)
 covid_data = COVID.daily_data(covid_data)
@@ -117,66 +117,62 @@ fig.update_layout(
 fig.show()
 
 
-# More concise work with functions and shit
-def plotting(df):
-    fig = plotly_express.scatter(df, x="Date", y="Positivity_Rate",
-                                 hover_data=['Positivity_Rate', 'Daily_Cases', 'Daily_Tests']). \
-        update_traces(mode="lines+markers")
-    fig.update_layout(
-        title={
-            'text': "Positivity Rate by Date Without {}".format(ignore_states),
-            'y': 0.95,
-            'x': 0.5,
-            'xanchor': 'center',
-            'yanchor': 'top'})
-    fig.show()
-    return 0
+class PlottingCOVID:
+
+    def plotting(df):
+        fig = plotly_express.scatter(df, x="Date", y="Positivity_Rate",
+                                     hover_data=['Positivity_Rate', 'Daily_Cases', 'Daily_Tests']). \
+            update_traces(mode="lines+markers")
+        fig.update_layout(
+            title={
+                'text': "Positivity Rate by Date Without {}".format(ignore_states),
+                'y': 0.95,
+                'x': 0.5,
+                'xanchor': 'center',
+                'yanchor': 'top'})
+        fig.show()
+        return 0
+
+    def without_states(df):
+        without_states = df[~(df['Province_State'].isin(ignore_states))]
+        df_grp = without_states.groupby(['Date'], as_index=False)['Daily_Cases', 'Daily_Tests'].agg('sum')
+        df_final = kpis(df_grp)
+        return plotting(df_final)
 
 
-def without_states(df):
-    without_states = df[~(df['Province_State'].isin(ignore_states))]
-    df_grp = without_states.groupby(['Date'], as_index=False)['Daily_Cases', 'Daily_Tests'].agg('sum')
-    df_final = kpis(df_grp)
-    return plotting(df_final)
+    # ignore_states = ["New York"]
+    # without_states(covid_data)
+    #
+    # ignore_states = ["Massachusetts", "Connecticut", "Rhode Island", "New Hampshire", "Vermont", "Maine"]
+    # without_states(covid_data)
+    #
+    # ignore_states = ["New York", "New Jersey", "Connecticut"]
+    # without_states(covid_data)
+    #
+    # ignore_states = ["New York", "New Jersey", "Connecticut",
+    #                      "New Hampshire", "Vermont", "Maine", "Massachusetts", "Rhode Island"]
+    # without_states(covid_data)
 
+    def plotting_keep(df):
+        fig = plotly_express.scatter(df, x="Date", y="Positivity_Rate",
+                                     hover_data=['Positivity_Rate', 'Daily_Cases', 'Daily_Tests']). \
+            update_traces(mode="lines+markers")
+        fig.update_layout(
+            title={
+                'text': "Positivity Rate by Date With Only {}".format(keep_states),
+                'y': 0.95,
+                'x': 0.5,
+                'xanchor': 'center',
+                'yanchor': 'top'})
+        fig.show()
+        return 0
 
-# ignore_states = ["New York"]
-# without_states(covid_data)
-#
-# ignore_states = ["Massachusetts", "Connecticut", "Rhode Island", "New Hampshire", "Vermont", "Maine"]
-# without_states(covid_data)
-#
-# ignore_states = ["New York", "New Jersey", "Connecticut"]
-# without_states(covid_data)
-#
-# ignore_states = ["New York", "New Jersey", "Connecticut",
-#                      "New Hampshire", "Vermont", "Maine", "Massachusetts", "Rhode Island"]
-# without_states(covid_data)
-
-
-def plotting_keep(df):
-    fig = plotly_express.scatter(df, x="Date", y="Positivity_Rate",
-                                 hover_data=['Positivity_Rate', 'Daily_Cases', 'Daily_Tests']). \
-        update_traces(mode="lines+markers")
-    fig.update_layout(
-        title={
-            'text': "Positivity Rate by Date With Only {}".format(keep_states),
-            'y': 0.95,
-            'x': 0.5,
-            'xanchor': 'center',
-            'yanchor': 'top'})
-    fig.show()
-    return 0
-
-
-def with_states(df):
-    without_states = df[(df['Province_State'].isin(keep_states))]
-    df_grp = without_states.groupby(['Date'], as_index=False)['Daily_Cases', 'Daily_Tests'].agg('sum')
-    df_final = kpis(df_grp)
-    return plotting_keep(df_final)
+    def with_states(df):
+        without_states = df[(df['Province_State'].isin(keep_states))]
+        df_grp = without_states.groupby(['Date'], as_index=False)['Daily_Cases', 'Daily_Tests'].agg('sum')
+        df_final = kpis(df_grp)
+        return plotting_keep(df_final)
 
 
 keep_states = ["Arizona", "Texas", "Missouri", "Alabama", "Florida", "South Carolina"]
-with_states(covid_data)
-
-
+PlottingCOVID.with_states(covid_data)
