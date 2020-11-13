@@ -1,13 +1,11 @@
-"""
-Researching COVID
-"""
-
 import pandas as pd
+import numpy as np
 import glob
 import matplotlib.pyplot as plt
 import datetime
 import plotly_express
 
+# Path depends on where you define the clone to
 path = '/Users/jasonrubenstein/Desktop/Python/covid/COVID-19/csse_covid_19_data/csse_covid_19_daily_reports_us/*.csv'
 covid_files = glob.glob(path)
 
@@ -33,11 +31,14 @@ class COVID:
         df['Deaths'] = df['Deaths'].astype("int")
         # df['People_Tested'].str.replace('.', '').astype(int)
         df['People_Tested'] = pd.to_numeric(df['People_Tested'])
+        df['Total_Test_Results'] = pd.to_numeric(df['Total_Test_Results'])
         # df['People_Tested'] = df['People_Tested'].astype("int")
         df['People_Hospitalized'] = pd.to_numeric(df['People_Hospitalized'])
         # df['People_Hospitalized'] = df['People_Hospitalized'].astype("int")
+        df['People_Tested'] = np.where(df['People_Tested'] == 0,
+                                       df['Total_Test_Results'],
+                                       df['People_Tested'])
         return df
-
 
     def shift_data(df):
         df['Prev_Cases'] = df.groupby("Province_State")["Confirmed"].shift(1)
@@ -46,7 +47,6 @@ class COVID:
         df['Prev_Hospitalizations'] = df.groupby("Province_State")["People_Hospitalized"].shift(1)
         df = df.fillna(0)
         return df
-
 
     def daily_data(df):
         df['Daily_Cases'] = df['Confirmed'] - df['Prev_Cases']
@@ -57,11 +57,9 @@ class COVID:
         df = df[(df['Date'] > "2020-04-13")]
         return df
 
-
     def kpis(df):
         df['Positivity_Rate'] = df['Daily_Cases'] / df['Daily_Tests']
         return df
-
 
     def moving_avg(df):
         df['14_Day_Avg_Positivity_Rate'] = df.groupby('Province_State')['Positivity_Rate'].transform(
@@ -70,17 +68,30 @@ class COVID:
             lambda x: x.rolling(14, 1).mean())
         return df
 
+    def fix_neg_tests(df):
+        df['Daily_Tests'] = np.where(df['Daily_Tests'] < 0,
+                                     df['14_Day_Avg_Tests'],
+                                     df['Daily_Tests'])
+        return df
 
-covid_data = get_csvs(covid_files)
+    def recursive_avg(df):
+        COVID.moving_avg(df)
+        COVID.fix_neg_tests(df)
+        COVID.moving_avg(df)
+        return df
+
+
+
+covid_data = COVID.get_csvs(covid_files)
 covid_data = covid_data[covid_data['Last_Update'].notna()]
-covid_data = covid_data.sort_values(by="Last_Update")
+covid_data = covid_data.sort_values(by="Last_Update").reset_index(drop=True)
 covid_data = covid_data.fillna(0)
 
 covid_data = COVID.to_ints(covid_data)
 covid_data = COVID.shift_data(covid_data)
 covid_data = COVID.daily_data(covid_data)
 covid_data = COVID.kpis(covid_data)
-covid_data = COVID.moving_avg(covid_data)
+covid_data = COVID.recursive_avg(covid_data)
 
 
 states = ["New York", "California", "Texas", "Alabama", "North Carolina", "South Carolina", "Michigan",
@@ -140,19 +151,6 @@ class PlottingCOVID:
         return plotting(df_final)
 
 
-    # ignore_states = ["New York"]
-    # without_states(covid_data)
-    #
-    # ignore_states = ["Massachusetts", "Connecticut", "Rhode Island", "New Hampshire", "Vermont", "Maine"]
-    # without_states(covid_data)
-    #
-    # ignore_states = ["New York", "New Jersey", "Connecticut"]
-    # without_states(covid_data)
-    #
-    # ignore_states = ["New York", "New Jersey", "Connecticut",
-    #                      "New Hampshire", "Vermont", "Maine", "Massachusetts", "Rhode Island"]
-    # without_states(covid_data)
-
     def plotting_keep(df):
         fig = plotly_express.scatter(df, x="Date", y="Positivity_Rate",
                                      hover_data=['Positivity_Rate', 'Daily_Cases', 'Daily_Tests']). \
@@ -170,9 +168,12 @@ class PlottingCOVID:
     def with_states(df):
         without_states = df[(df['Province_State'].isin(keep_states))]
         df_grp = without_states.groupby(['Date'], as_index=False)['Daily_Cases', 'Daily_Tests'].agg('sum')
-        df_final = kpis(df_grp)
-        return plotting_keep(df_final)
+        df_final = COVID.kpis(df_grp)
+        return PlottingCOVID.plotting_keep(df_final)
 
 
-keep_states = ["Arizona", "Texas", "Missouri", "Alabama", "Florida", "South Carolina"]
+keep_states = ["Arizona", "Texas", "Missouri", "Alabama", "Florida", "South Carolina"
+    # "New York", "New Jersey", "Connecticut"
+]
 PlottingCOVID.with_states(covid_data)
+
